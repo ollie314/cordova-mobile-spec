@@ -59,7 +59,15 @@ function pluginAdd(pluginName, searchPath, extraFlags) {
     if (!pluginName) {
         return;
     }
-    var command = cli + ' plugin add ' + pluginName + ' --searchpath ' + searchPath;
+    if (!searchPath || typeof searchPath !== "string") {
+        searchPath = '';
+    }
+    var command;
+    if (fs.existsSync(path.join(searchPath, pluginName, 'plugin.xml'))) {
+        command = cli + ' plugin add ' + path.join(searchPath, pluginName);
+    } else {
+        command = cli + ' plugin add ' + pluginName + ' --searchpath ' + searchPath;
+    }
     if (extraFlags) {
         command += extraFlags;
     }
@@ -92,10 +100,13 @@ var top_dir =             process.cwd() + path.sep,
                             "blackberry10": { "bin": ["cordova-blackberry"],
                                               "www": ["www"],
                                               "config": ["www"] },
+                            "browser": { "bin": ["cordova-browser"],
+                                              "www": ["www"],
+                                              "config": ["www"] },   
                             "ios":          { "bin": ["cordova-ios"],
                                               "www": ["www"],
                                               "config": ["CUSTOM"] },
-                            "windows8":     { "bin": ["cordova-windows"],
+                            "osx":          { "bin": ["cordova-osx"],
                                               "www": ["www"] },
                             "windows":      { "bin": ["cordova-windows"],
                                               "www": ["www"] },
@@ -106,16 +117,17 @@ var top_dir =             process.cwd() + path.sep,
     argv = optimist.usage("\nUsage: $0 PLATFORM... [--help] [--plugman] [--link] [--global] [--globalplugins] [--plugins=\".\\myPluginDir\"] [--skipjs] [--skiplink] [directoryName]\n" +
                           "A project will be created with the mobile-spec app and all the core plugins.\n" +
                           "At least one platform must be specified. See the included README.md.\n" +
-                          "\tPLATFORM: [--<amazon|android|blackberry10|ios|windows|windows8|wp8|firefoxos>]\n" +
+                          "\tPLATFORM: [--<amazon|android|blackberry10|ios|windows|wp8|firefoxos|osx>]\n" +
                           "")
                    .boolean("help").describe("help", "Shows usage.")
                    .boolean("debug").describe("debug", "Debug logging.")
                    .boolean("amazon").describe("amazon", "Add Amazon FireOS platform.")
                    .boolean("android").describe("android", "Add Android platform.")
+                   .boolean("browser").describe("browser", "Add Browser platform.")
                    .boolean("blackberry10").describe("blackberry10", "Add BlackBerry 10 platform.")
                    .boolean("ios").describe("ios", "Add iOS platform.")
+                   .boolean("osx").describe("osx", "Add osx platform.")
                    .boolean("windows").describe("windows", "Add Windows (universal) platform.")
-                   .boolean("windows8").describe("windows8", "Add Windows 8 (desktop) platform.")
                    .boolean("wp8").describe("wp8", "Add Windows Phone 8 platform.")
                    .boolean("firefoxos").describe("firefoxos", "Add FirefoxOS platform.")
                    .boolean("plugman").describe("plugman", "Use {platform}/bin/create and plugman directly instead of the CLI.")
@@ -136,7 +148,6 @@ var top_dir =             process.cwd() + path.sep,
                                                  "\t\t\tUse only when you know what you are doing, this should be very rare.")
                    .boolean("linkplugins").describe("linkplugins", "Use the --link flag when running `cordova plugin add`.\n")
                    .boolean("linkplatforms").describe("linkplatforms", "Use the --link flag when running `cordova platform add`.\n")
-                   .boolean("copywww").describe("copywww", "Use --copy-from instead of --link-to when running `cordova create`.\n")
                    .boolean("link").describe("link", "Alias for --linkplugins --linkplatforms.\n")
                    .boolean("browserify").describe("browserify", "Use the --browserify flag when running `cordova plugin add`.\n")
                    .boolean("telerikplugins").describe("telerikplugins", "Adds a bunch of known-to-be-popular plugins from Telerik-Verified-Plugins.\n")
@@ -214,12 +225,36 @@ var DEFAULT_PLUGINS = [
     'cordova-plugin-whitelist',
 ];
 
+// OSX has little support for the most of the plugins, so it gets its own default list
+var DEFAULT_PLUGINS_OSX = [
+    //'cordova-plugin-battery-status',
+    //'cordova-plugin-camera',
+    //'cordova-plugin-console',
+    //'cordova-plugin-contacts',
+    'cordova-plugin-device',
+    //'cordova-plugin-device-motion',
+    //'cordova-plugin-device-orientation',
+    //'cordova-plugin-dialogs',
+    'cordova-plugin-file',
+    //'cordova-plugin-file-transfer',
+    //'cordova-plugin-geolocation',
+    //'cordova-plugin-globalization',
+    //'cordova-plugin-inappbrowser',
+    //'cordova-plugin-media',
+    //'cordova-plugin-media-capture',
+    //'cordova-plugin-network-information',
+    //'cordova-plugin-splashscreen',
+    //'cordova-plugin-statusbar',
+    //'cordova-plugin-vibration',
+    'cordova-plugin-whitelist',
+];
+
 // plugin search paths that will override default
+// removed 'org.apache.cordova.test.whitelist': mobile_spec_git_dir,
 var SEARCH_PATHS = {
-    'org.apache.cordova.mobilespec.tests': mobile_spec_git_dir,
-    'org.apache.cordova.test.whitelist': mobile_spec_git_dir,
+    'org.apache.cordova.mobilespec.tests': mobile_spec_git_dir,   
     'org.apache.cordova.test.echo': mobile_spec_git_dir,
-    'cordova-plugin-test-framework': top_dir,
+    'cordova-plugin-test-framework': top_dir
 };
 
 if (!fs.existsSync(mobile_spec_git_dir)) {
@@ -235,11 +270,12 @@ if (argv.help) { optimist.showHelp(); quit(); }
 if (argv.amazon) { platforms.push("amazon-fireos"); }
 if (argv.android) { platforms.push("android"); }
 if (argv.ios) { platforms.push("ios"); }
+if (argv.browser) { platforms.push("browser"); }
 if (argv.blackberry10) { platforms.push("blackberry10"); }
 if (argv.wp8) { platforms.push("wp8"); }
-if (argv.windows8) { platforms.push("windows8"); }
 if (argv.windows) { platforms.push("windows"); }
 if (argv.firefoxos) { platforms.push("firefoxos"); }
+if (argv.osx) {platforms.push("osx");}
 
 argv.skiplink = argv.skiplink || argv.global;
 argv.skipjs = argv.skipjs || argv.global;
@@ -449,8 +485,7 @@ if (argv.plugman) {
     // Create the project using "cordova create"
     myDelete(cli_project_dir);
     console.log("Creating project mobilespec...");
-    var copyOrLinkFlag = argv.copywww ? '--copy-from' : '--link-to';
-    shelljs.exec(cli + " create " + projectDirName + " org.apache.cordova.mobilespec MobileSpec_Tests " + copyOrLinkFlag + " cordova-mobile-spec/www");
+    shelljs.exec(cli + " create " + projectDirName + " org.apache.cordova.mobilespec MobileSpec_Tests --template cordova-mobile-spec/www");
     shelljs.cp("-f", path.join(mobile_spec_git_dir, 'config.xml'), path.join(projectDirName, 'config.xml'));
 
     // Config.json file ---> linked to local libraries
@@ -498,9 +533,20 @@ function pluginIdToDirName(id) {
 ////////////////////// install plugins for each platform
 function installPlugins() {
     var plugins = DEFAULT_PLUGINS;
+
+    // special override for osx
+    if (argv.osx) {
+        if (platforms.length > 1) {
+            console.warn('Warning: Testing more than one platform at once might cause problems with unsupported plugins for OSX');
+        } else {
+            console.warn('Warning: Using reduced plugin list for OSX-only tests.');
+            plugins = DEFAULT_PLUGINS_OSX;
+        }
+    }
+
     if (argv.plugins) {
-        plugins = argv.plugins.split(" ").filter(function (item) { 
-            return item !== ""; 
+        plugins = argv.plugins.split(" ").filter(function (item) {
+            return item !== "";
         });
     }
 
@@ -553,9 +599,9 @@ function installPlugins() {
         // Install mobilespec tests only if we install default list of plugins
         // If custom list of plugins is being installed, mobilespec tests can be listed there, if needed
         if (!argv.plugins) {
-            pluginAdd('org.apache.cordova.mobilespec.tests', mobile_spec_git_dir, linkPluginsFlag + browserifyFlag);
+            //pluginAdd('org.apache.cordova.mobilespec.tests', mobile_spec_git_dir, linkPluginsFlag + browserifyFlag);
         }
-        pluginAdd('org.apache.cordova.test.whitelist', mobile_spec_git_dir, linkPluginsFlag + browserifyFlag);
+        //pluginAdd('org.apache.cordova.test.whitelist', mobile_spec_git_dir, linkPluginsFlag + browserifyFlag);
         pluginAdd('org.apache.cordova.test.echo', mobile_spec_git_dir, linkPluginsFlag + browserifyFlag);
 
         pluginAdd('cordova-plugin-test-framework', searchPath, linkPluginsFlag + browserifyFlag);

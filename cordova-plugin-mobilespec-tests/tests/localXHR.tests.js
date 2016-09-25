@@ -19,9 +19,12 @@
  *
  */
 
+// These tests are needed to check browser's functionality and verify that we are not breaking it.
 exports.defineAutoTests = function () {
     var isWp8 = cordova.platformId === "windowsphone";
-
+    var isIOS = (cordova.platformId === "ios");
+    var isIOSWKWebView = isIOS && (window.webkit && window.webkit.messageHandlers);
+               
     describe("XMLHttpRequest", function () {
         var errorHandler = {
             onError: function (done) {
@@ -97,7 +100,7 @@ exports.defineAutoTests = function () {
         });
 
         it("XMLHttpRequest.spec.9 calls onload from successful http get", function (done) {
-            createXHR("http://cordova-filetransfer.jitsu.com", true, done, errorHandler.onError.bind(null, done));
+            createXHR("http://www.google.com", true, done, errorHandler.onError.bind(null, done));
         });
 
         it("XMLHttpRequest.spec.3 should be able to load the current page", function (done) {
@@ -105,6 +108,10 @@ exports.defineAutoTests = function () {
         });
 
         it("XMLHttpRequest.spec.4 should be able to load the parent folder page ../index.html", function (done) {
+            if (isIOSWKWebView) {
+                pending();
+            }
+           
             createXHR("../index.html", true, done, errorHandler.onError.bind(null, done));
         });
 

@@ -21,7 +21,10 @@
 exports.defineAutoTests = function () {
 
     var isWindowsPhone = cordova.platformId == 'windowsphone';
-    var isWindows = (cordova.platformId === "windows") || (cordova.platformId === "windows8")
+    var isWindows = (cordova.platformId === "windows") || (cordova.platformId === "windows8");
+    var isIOS = (cordova.platformId === "ios");
+    var isOSX = (cordova.platformId === "osx");
+    var isIOSWKWebView = isIOS && (window.webkit && window.webkit.messageHandlers);
 
     describe("Session Storage", function () {
         it("storage.spec.1 should exist", function () {
@@ -176,7 +179,11 @@ exports.defineAutoTests = function () {
 
         describe("HTML 5 Storage", function () {
             it("storage.spec.9 should exist", function () {
-                expect(window.openDatabase);
+                //IE doesn't support openDatabase method
+                if (isWindows || isWindowsPhone) {
+                    pending();
+                }
+                expect(window.openDatabase).toBeDefined();
             });
 
             it("storage.spec.17 should contain an openDatabase function", function () {
@@ -212,6 +219,14 @@ exports.defineAutoTests = function () {
                         pending();
                     }
 
+                    if (isIOSWKWebView) {
+                        pending();
+                    }
+                    if (isOSX) {
+                        // see CB-10579
+                        pending();
+                    }
+
                     var db = openDatabase("Database", "1.0", "HTML5 Database API example", 5 * 1024 * 1024);
                     db.transaction(function (t) {
                         t.executeSql('CREATE TABLE IF NOT EXISTS foo(id int, name varchar(255));');
@@ -226,4 +241,4 @@ exports.defineAutoTests = function () {
             });
         });
     });
-}
+};
